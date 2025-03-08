@@ -14,12 +14,13 @@ import ForgeReconciler, {
   Box,
   TabList,
   TabPanel,
-  Button,
+  LoadingButton,
 } from "@forge/react";
-import React from "react";
+import React, { useState, useEffect } from "react";
 
 const TokenForm = ({ onSubmit }) => {
-  const { handleSubmit, getFieldId, register } = useForm();
+  const { handleSubmit, getFieldId, register, formState } = useForm();
+  const { isSubmitting } = formState;
 
   return (
     <Form onSubmit={handleSubmit(onSubmit)}>
@@ -35,15 +36,21 @@ const TokenForm = ({ onSubmit }) => {
         <HelperMessage>Copy Toggl API key</HelperMessage>
       </FormSection>
       <FormFooter>
-        <Button appearance="primary" type="submit">
+        <LoadingButton isLoading={isSubmitting} appearance="primary" type="submit">
           Submit
-        </Button>
+        </LoadingButton>
       </FormFooter>
     </Form>
   );
 };
 
-const TabbedView = () => {
+const SettingsTab = ({ children }) => <TabPanel>{children}</TabPanel>;
+
+const TabbedView = ({ children }) => {
+  const settingsTab = React.Children.toArray(children).find((child) => {
+    return child.type === SettingsTab;
+  });
+
   return (
     <Tabs id="default">
       <TabList>
@@ -51,21 +58,33 @@ const TabbedView = () => {
         <Tab>Settings</Tab>
       </TabList>
       <TabPanel>
-        <Box>
-          This is the content area of the first tab.
-        </Box>
+        <Box>This is the content area of the first tab.</Box>
       </TabPanel>
-      <TabPanel>
-        <TokenForm />
-      </TabPanel>
+      {settingsTab}
     </Tabs>
   );
 };
 const App = () => {
-  const login = (token) => {
-    invoke("setTogglApiToken", { token });
+  const submitToken = (formPayload) => {
+    invoke("setTogglApiKey", formPayload.apiKey);
   };
-  return <TabbedView />;
+
+  const [ apiKey, setApiKey ] = useState(async () => {
+    const apiKey = await invoke("getTogglApiKey");
+    setApiKey(apiKey);
+  });
+
+  useEffect(() => {
+    console.log(apiKey, "....apiTokenChanged");
+  }, [apiKey]);
+
+  return (
+    <TabbedView>
+      <SettingsTab>
+        <TokenForm onSubmit={submitToken} />
+      </SettingsTab>
+    </TabbedView>
+  );
 };
 
 ForgeReconciler.render(
