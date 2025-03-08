@@ -1,42 +1,70 @@
 import { invoke } from "@forge/bridge";
 import ForgeReconciler, {
-  useForm,
+  Box,
   Form,
   FormFooter,
-  FormHeader,
-  Label,
-  Textfield,
   FormSection,
   HelperMessage,
+  Icon,
+  Label,
+  LoadingButton,
   RequiredAsterisk,
-  Tabs,
   Tab,
-  Box,
   TabList,
   TabPanel,
-  LoadingButton,
+  Tabs,
+  Textfield,
+  useForm,
 } from "@forge/react";
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 
-const TokenForm = ({ onSubmit }) => {
-  const { handleSubmit, getFieldId, register, formState } = useForm();
-  const { isSubmitting } = formState;
+const TokenForm = ({ apiKey, onSubmit }) => {
+  const { handleSubmit, getFieldId, register, formState } = useForm({
+    defaultValues: {
+      apiKey,
+    },
+  });
+  const { isSubmitting, isSubmitSuccessful } = formState;
+  const [successIcon, setSuccessIcon] = useState(false);
+
+  useEffect(() => {
+    if (isSubmitSuccessful) {
+      setSuccessIcon(true);
+      setTimeout(() => {
+        setSuccessIcon(false);
+      }, 5_000);
+    }
+  }, [isSubmitSuccessful]);
 
   return (
     <Form onSubmit={handleSubmit(onSubmit)}>
-      <FormHeader title="Set Toggl Api Key">
-        Required fields are marked with an asterisk <RequiredAsterisk />
-      </FormHeader>
       <FormSection>
         <Label labelFor={getFieldId("apiKey")}>
           API Key
           <RequiredAsterisk />
         </Label>
-        <Textfield {...register("apiKey", { required: true })} />
+        <Textfield
+          {...register("apiKey", { required: true })}
+          elemAfterInput={
+            successIcon && (
+              <Box xcss={{ marginTop: "space.050", marginRight: "space.50" }}>
+                <Icon
+                  glyph="editor-success"
+                  label="saved"
+                  primaryColor="color.icon.success"
+                />
+              </Box>
+            )
+          }
+        />
         <HelperMessage>Copy Toggl API key</HelperMessage>
       </FormSection>
       <FormFooter>
-        <LoadingButton isLoading={isSubmitting} appearance="primary" type="submit">
+        <LoadingButton
+          isLoading={isSubmitting}
+          appearance="primary"
+          type="submit"
+        >
           Submit
         </LoadingButton>
       </FormFooter>
@@ -65,23 +93,22 @@ const TabbedView = ({ children }) => {
   );
 };
 const App = () => {
-  const submitToken = (formPayload) => {
-    invoke("setTogglApiKey", formPayload.apiKey);
-  };
+  const [apiKey, setApiKey] = useState(null);
 
-  const [ apiKey, setApiKey ] = useState(async () => {
+  useEffect(async () => {
     const apiKey = await invoke("getTogglApiKey");
     setApiKey(apiKey);
-  });
+  }, []);
 
-  useEffect(() => {
-    console.log(apiKey, "....apiTokenChanged");
-  }, [apiKey]);
+  const submitToken = (formPayload) => {
+    invoke("setTogglApiKey", formPayload.apiKey);
+    setApiKey(formPayload.apiKey);
+  };
 
   return (
     <TabbedView>
       <SettingsTab>
-        <TokenForm onSubmit={submitToken} />
+        <TokenForm onSubmit={submitToken} apiKey={apiKey} />
       </SettingsTab>
     </TabbedView>
   );
