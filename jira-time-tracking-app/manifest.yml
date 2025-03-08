@@ -1,0 +1,21 @@
+modules:
+  jira:issueAction:
+    - key: jira-toggl-issue-action
+      resource: src
+      resolver:
+        function: resolver
+      render: native
+      title: Jira <> Toggl Integration
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: src
+    path: src/frontend/index.jsx
+app:
+  runtime:
+    name: nodejs20.x
+  id: ari:cloud:ecosystem::app/373d2bad-e802-43be-8dfb-e61636e7ee48
+permissions:
+  scopes:
+    - read:jira-work
