@@ -1,7 +1,7 @@
 modules:
   jira:issueAction:
     - key: jira-toggl-issue-action
-      resource: src
+      resource: main
       resolver:
         function: resolver
       render: native
@@ -10,7 +10,7 @@ modules:
     - key: resolver
       handler: index.handler
 resources:
-  - key: src
+  - key: main
     path: src/frontend/index.jsx
 app:
   runtime:

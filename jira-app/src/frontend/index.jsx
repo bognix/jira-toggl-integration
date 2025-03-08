@@ -1,26 +1,28 @@
 import { invoke } from "@forge/bridge";
 import ForgeReconciler, {
-  Button,
+  useForm,
   Form,
   FormFooter,
   FormHeader,
+  Label,
+  Textfield,
   FormSection,
   HelperMessage,
-  Label,
   RequiredAsterisk,
-  Textfield,
-  useForm,
+  Tabs,
+  Tab,
+  Box,
+  TabList,
+  TabPanel,
+  Button,
 } from "@forge/react";
 import React from "react";
 
-const App = () => {
+const TokenForm = ({ onSubmit }) => {
   const { handleSubmit, getFieldId, register } = useForm();
-  const login = (token) => {
-    invoke("setTogglApiToken", { token });
-  };
 
   return (
-    <Form onSubmit={handleSubmit(login)}>
+    <Form onSubmit={handleSubmit(onSubmit)}>
       <FormHeader title="Set Toggl Api Key">
         Required fields are marked with an asterisk <RequiredAsterisk />
       </FormHeader>
@@ -39,6 +41,31 @@ const App = () => {
       </FormFooter>
     </Form>
   );
+};
+
+const TabbedView = () => {
+  return (
+    <Tabs id="default">
+      <TabList>
+        <Tab>Track Time</Tab>
+        <Tab>Settings</Tab>
+      </TabList>
+      <TabPanel>
+        <Box>
+          This is the content area of the first tab.
+        </Box>
+      </TabPanel>
+      <TabPanel>
+        <TokenForm />
+      </TabPanel>
+    </Tabs>
+  );
+};
+const App = () => {
+  const login = (token) => {
+    invoke("setTogglApiToken", { token });
+  };
+  return <TabbedView />;
 };
 
 ForgeReconciler.render(
