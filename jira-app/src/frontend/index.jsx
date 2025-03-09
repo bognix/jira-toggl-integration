@@ -1,6 +1,7 @@
 import { invoke } from "@forge/bridge";
 import ForgeReconciler, {
   Box,
+  Button,
   Form,
   FormFooter,
   FormSection,
@@ -14,7 +15,7 @@ import ForgeReconciler, {
   TabPanel,
   Tabs,
   Textfield,
-  useForm
+  useForm,
 } from "@forge/react";
 import React, { useEffect, useState } from "react";
 
@@ -78,9 +79,19 @@ const SettingsTab = ({ children }) => (
   </TabPanel>
 );
 
+const TimerTab = ({ children }) => (
+  <TabPanel>
+    <Box xcss={{ width: "100%" }}>{children}</Box>
+  </TabPanel>
+);
+
 const TabbedView = ({ children }) => {
   const settingsTab = React.Children.toArray(children).find((child) => {
     return child.type === SettingsTab;
+  });
+
+  const timerTab = React.Children.toArray(children).find((child) => {
+    return child.type === TimerTab;
   });
 
   return (
@@ -89,9 +100,7 @@ const TabbedView = ({ children }) => {
         <Tab>Track Time</Tab>
         <Tab>Settings</Tab>
       </TabList>
-      <TabPanel>
-        <Box>This is the content area of the first tab.</Box>
-      </TabPanel>
+      {timerTab}
       {settingsTab}
     </Tabs>
   );
@@ -99,16 +108,39 @@ const TabbedView = ({ children }) => {
 
 const App = () => {
   const [apiKey, setApiKey] = useState(null);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     const getTogglApiKey = async () => {
       const apiKey = await invoke("getTogglApiKey");
       setApiKey(apiKey);
     };
-
-    getTogglApiKey()
-      .catch(console.error)
+    getTogglApiKey().catch(console.error);
   }, []);
+
+  useEffect(() => {
+    const getTogglUser = async () => {
+      const togglUser = await invoke("getTogglUser", { apiKey });
+      setUser(togglUser);
+    };
+
+    if (apiKey) {
+      getTogglUser().catch(console.error);
+    }
+  }, [apiKey]);
+
+  const onTimerStartClick = () => {
+    const startTimer = async () => {
+      await invoke("startTogglTimer", {
+        apiKey,
+        workspaceId: user.default_workspace_id,
+      });
+    };
+
+    if (user.id) {
+      startTimer().catch(console.error);
+    }
+  };
 
   const submitApiKey = (formPayload) => {
     invoke("setTogglApiKey", formPayload.apiKey);
@@ -117,6 +149,15 @@ const App = () => {
 
   return (
     <TabbedView>
+      <TimerTab>
+        <Button
+          appearance="primary"
+          iconAfter="vid-play"
+          onClick={() => onTimerStartClick()}
+        >
+          Start
+        </Button>
+      </TimerTab>
       <SettingsTab>
         <TokenForm onSubmit={submitApiKey} apiKey={apiKey} />
       </SettingsTab>

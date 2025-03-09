@@ -20,3 +20,17 @@ permissions:
   scopes:
     - read:jira-work
     - storage:app
+  external:
+    fetch:
+      backend:
+      - remote: toggl-api
+remotes:
+  - key: toggl-api
+    baseUrl: "https://api.track.toggl.com"
+    operations:
+      - fetch
+      - compute
+      - other
+      - storage
+    storage:
+        inScopeEUD: false
