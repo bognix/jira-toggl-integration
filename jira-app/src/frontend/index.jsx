@@ -14,18 +14,18 @@ import ForgeReconciler, {
   TabPanel,
   Tabs,
   Textfield,
-  useForm,
+  useForm
 } from "@forge/react";
 import React, { useEffect, useState } from "react";
 
 const TokenForm = ({ apiKey, onSubmit }) => {
+  const [successIcon, setSuccessIcon] = useState(false);
   const { handleSubmit, getFieldId, register, formState } = useForm({
     defaultValues: {
       apiKey,
     },
   });
   const { isSubmitting, isSubmitSuccessful } = formState;
-  const [successIcon, setSuccessIcon] = useState(false);
 
   useEffect(() => {
     if (isSubmitSuccessful) {
@@ -47,7 +47,7 @@ const TokenForm = ({ apiKey, onSubmit }) => {
           {...register("apiKey", { required: true })}
           elemAfterInput={
             successIcon && (
-              <Box xcss={{ marginTop: "space.050", marginRight: "space.50" }}>
+              <Box xcss={{ marginTop: "space.050", marginRight: "space.050" }}>
                 <Icon
                   glyph="editor-success"
                   label="saved"
@@ -72,7 +72,11 @@ const TokenForm = ({ apiKey, onSubmit }) => {
   );
 };
 
-const SettingsTab = ({ children }) => <TabPanel>{children}</TabPanel>;
+const SettingsTab = ({ children }) => (
+  <TabPanel>
+    <Box xcss={{ width: "100%" }}>{children}</Box>
+  </TabPanel>
+);
 
 const TabbedView = ({ children }) => {
   const settingsTab = React.Children.toArray(children).find((child) => {
@@ -92,15 +96,21 @@ const TabbedView = ({ children }) => {
     </Tabs>
   );
 };
+
 const App = () => {
   const [apiKey, setApiKey] = useState(null);
 
-  useEffect(async () => {
-    const apiKey = await invoke("getTogglApiKey");
-    setApiKey(apiKey);
+  useEffect(() => {
+    const getTogglApiKey = async () => {
+      const apiKey = await invoke("getTogglApiKey");
+      setApiKey(apiKey);
+    };
+
+    getTogglApiKey()
+      .catch(console.error)
   }, []);
 
-  const submitToken = (formPayload) => {
+  const submitApiKey = (formPayload) => {
     invoke("setTogglApiKey", formPayload.apiKey);
     setApiKey(formPayload.apiKey);
   };
@@ -108,7 +118,7 @@ const App = () => {
   return (
     <TabbedView>
       <SettingsTab>
-        <TokenForm onSubmit={submitToken} apiKey={apiKey} />
+        <TokenForm onSubmit={submitApiKey} apiKey={apiKey} />
       </SettingsTab>
     </TabbedView>
   );
