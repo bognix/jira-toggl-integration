@@ -22,10 +22,20 @@ const fetchIssueDetails = async (issueKey) => {
   return await response.json();
 };
 
-resolver.define("startTogglTimer", async ({ payload, context }) => {
+resolver.define("startTogglTimeEntry", async ({ payload, context }) => {
   const issueDetails = await fetchIssueDetails(context?.extension?.issue.key)
   const apiClient = createClient(payload.apiKey);
-  return await apiClient.startTimeEntry(payload.workspaceId, issueDetails.fields.summary);
+  return await apiClient.startTimeEntry(payload.workspaceId, `${issueDetails.key} - ${issueDetails.fields.summary}`);
 });
+
+resolver.define("stopTogglTimeEntry", async ({ payload, context }) => {
+  const apiClient = createClient(payload.apiKey);
+  return await apiClient.stopTimeEntry(payload.workspaceId, payload.timeEntryId);
+});
+
+resolver.define("getCurrentTogglTimeEntry", async ({ payload }) => {
+  const apiClient = createClient(payload.apiKey)
+  return await apiClient.getCurrentTimeEntry()
+})
 
 export const handler = resolver.getDefinitions();

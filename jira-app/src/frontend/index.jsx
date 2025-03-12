@@ -15,7 +15,10 @@ import ForgeReconciler, {
   TabPanel,
   Tabs,
   Textfield,
+  Text,
   useForm,
+  Inline,
+  Strong,
 } from "@forge/react";
 import React, { useEffect, useState } from "react";
 
@@ -79,9 +82,9 @@ const SettingsTab = ({ children }) => (
   </TabPanel>
 );
 
-const TimerTab = ({ children }) => (
+const TimeEntryTab = ({ children }) => (
   <TabPanel>
-    <Box xcss={{ width: "100%" }}>{children}</Box>
+    <Box xcss={{ width: "100%", paddingTop: "space.200" }}>{children}</Box>
   </TabPanel>
 );
 
@@ -90,8 +93,8 @@ const TabbedView = ({ children }) => {
     return child.type === SettingsTab;
   });
 
-  const timerTab = React.Children.toArray(children).find((child) => {
-    return child.type === TimerTab;
+  const timeEntryTab = React.Children.toArray(children).find((child) => {
+    return child.type === TimeEntryTab;
   });
 
   return (
@@ -100,7 +103,7 @@ const TabbedView = ({ children }) => {
         <Tab>Track Time</Tab>
         <Tab>Settings</Tab>
       </TabList>
-      {timerTab}
+      {timeEntryTab}
       {settingsTab}
     </Tabs>
   );
@@ -109,7 +112,15 @@ const TabbedView = ({ children }) => {
 const App = () => {
   const [apiKey, setApiKey] = useState(null);
   const [user, setUser] = useState(null);
+  const [currentTimeEntry, setCurrentTimeEntry] = useState(null);
 
+  const getCurrentTimeEntry = async () => {
+    console.log('inside getCurrentTimeEntry...')
+    const currentTimeEntry = await invoke("getCurrentTogglTimeEntry", { apiKey });
+    console.log(currentTimeEntry)
+    setCurrentTimeEntry(currentTimeEntry);
+  };
+  
   useEffect(() => {
     const getTogglApiKey = async () => {
       const apiKey = await invoke("getTogglApiKey");
@@ -129,16 +140,42 @@ const App = () => {
     }
   }, [apiKey]);
 
-  const onTimerStartClick = () => {
-    const startTimer = async () => {
-      await invoke("startTogglTimer", {
+  useEffect(() => {
+    if (apiKey && user?.id) {
+      getCurrentTimeEntry().catch(console.error);
+    }
+  }, [apiKey, user]);
+
+  const onTimeEntryStartClick = () => {
+    const startTimeEntry = async () => {
+      await invoke("startTogglTimeEntry", {
         apiKey,
         workspaceId: user.default_workspace_id,
       });
     };
 
-    if (user.id) {
-      startTimer().catch(console.error);
+    if (user?.id) {
+      startTimeEntry()
+      .then(() => {
+        return getCurrentTimeEntry()
+      })
+      .catch(console.error);
+    }
+  };
+
+  const onTimeEntryStopClick = () => {
+    const stopTimeEntry = async () => {
+      await invoke("stopTogglTimeEntry", {
+        apiKey,
+        timeEntryId: currentTimeEntry.id,
+        workspaceId: user.default_workspace_id,
+      });
+    };
+
+    if (currentTimeEntry?.id) {
+      stopTimeEntry().then(() => {
+        return getCurrentTimeEntry()
+      }).catch(console.error);
     }
   };
 
@@ -149,15 +186,32 @@ const App = () => {
 
   return (
     <TabbedView>
-      <TimerTab>
-        <Button
-          appearance="primary"
-          iconAfter="vid-play"
-          onClick={() => onTimerStartClick()}
-        >
-          Start
-        </Button>
-      </TimerTab>
+      <TimeEntryTab>
+        {currentTimeEntry ? (
+          <Inline alignBlock="center" space="space.200">
+            <Text>
+              <Strong>Current Time Entry:</Strong>{" "}
+              {currentTimeEntry.description}
+            </Text>
+            <Button
+              appearance="primary"
+              iconAfter="vid-pause"
+              onClick={() => onTimeEntryStopClick()}
+            >
+              Stop
+            </Button>
+          </Inline>
+        ) : (
+          <Button
+            appearance="primary"
+            iconAfter="vid-play"
+            isDisabled={!user?.id}
+            onClick={() => onTimeEntryStartClick()}
+          >
+            Start
+          </Button>
+        )}
+      </TimeEntryTab>
       <SettingsTab>
         <TokenForm onSubmit={submitApiKey} apiKey={apiKey} />
       </SettingsTab>

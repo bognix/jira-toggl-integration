@@ -44,11 +44,25 @@ export const createClient = (apiToken) => {
       duration: -1,
       start: new Date().toISOString(),
       workspace_id: workspaceId,
+      description,
     });
   };
 
+  const stopTimeEntry = async (workspaceId, timeEntryId) => {
+    return await callApi(
+      `workspaces/${workspaceId}/time_entries/${timeEntryId}/stop`,
+      "PATCH"
+    );
+  };
+
+  const getCurrentTimeEntry = async () => {
+    return await callApi(`me/time_entries/current`, "GET");
+  };
+
   return {
+    getCurrentTimeEntry,
     getUser,
     startTimeEntry,
+    stopTimeEntry,
   };
 };
