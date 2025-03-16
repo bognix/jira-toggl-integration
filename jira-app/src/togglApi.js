@@ -28,10 +28,11 @@ export const createClient = (apiToken) => {
           headers: { ...settings.headers },
         }
       );
-      const json = await response.json();
-      return json;
+      const jsonResponse = await response.json();
+      return jsonResponse ?? {};
     } catch (e) {
       console.error(e);
+      return {}
     }
   };
 
@@ -56,7 +57,7 @@ export const createClient = (apiToken) => {
   };
 
   const getCurrentTimeEntry = async () => {
-    return await callApi(`me/time_entries/current`, "GET");
+    return await callApi("me/time_entries/current", "GET");
   };
 
   return {
