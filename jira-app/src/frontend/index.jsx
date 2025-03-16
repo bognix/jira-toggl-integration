@@ -152,6 +152,44 @@ const timerStateReducer = (state, event) => {
   return state;
 };
 
+const timeSincePassed = (dateString) => {
+  // Parse the input date string
+  const pastDate = new Date(dateString);
+
+  // Get current date and time
+  const currentDate = new Date();
+
+  // Calculate the difference in milliseconds
+  const differenceMs = currentDate - pastDate;
+
+  // Convert milliseconds to seconds (round down to nearest integer)
+  let totalSeconds = Math.floor(differenceMs / 1000);
+
+  // Calculate days, hours, minutes, and remaining seconds
+  const days = Math.floor(totalSeconds / (24 * 60 * 60));
+  totalSeconds %= 24 * 60 * 60;
+
+  const hours = Math.floor(totalSeconds / (60 * 60));
+  totalSeconds %= 60 * 60;
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  // Pad minutes and seconds with leading zeros if needed
+  const paddedMinutes = minutes < 10 ? `0${minutes}` : minutes;
+  const paddedSeconds = seconds < 10 ? `0${seconds}` : seconds;
+
+  // Format the output according to the rules
+  if (days > 0) {
+    return `${days} ${hours}:${paddedMinutes}:${paddedSeconds}`;
+  } else if (hours > 0) {
+    return `${hours}:${paddedMinutes}:${paddedSeconds}`;
+  } else if (minutes > 0) {
+    return `${paddedMinutes}m:${paddedSeconds}s`;
+  } else {
+    return `${paddedSeconds}s`;
+  }
+};
 const getTogglApiKey = async () => {
   try {
     return await invoke("getTogglApiKey");
@@ -209,6 +247,9 @@ const App = () => {
   const [apiKey, setApiKey] = useState(null);
   const [user, setUser] = useState(null);
   const [currentTimeEntry, setCurrentTimeEntry] = useState(null);
+  const [currentTimeEntryTimer, setCurrentTimeEntryTimer] = useState(null);
+  const [currentTimeEntryInterval, setCurrentTimeEntryInterval] =
+    useState(null);
   const [appState, appStateDispatch] = useReducer(
     appStateReducer,
     LoadingState.Initial
@@ -247,6 +288,24 @@ const App = () => {
         });
     }
   }, [apiKey]);
+
+  useEffect(() => {
+    if (currentTimeEntry?.start) {
+      const interval = setInterval(() => {
+        const timeSince = timeSincePassed(currentTimeEntry.start);
+        setCurrentTimeEntryTimer(timeSince);
+      }, 1000);
+      setCurrentTimeEntryInterval(interval);
+    }
+
+    return () => {
+      if (!currentTimeEntry) {
+        clearInterval(currentTimeEntryInterval);
+        setCurrentTimeEntryInterval(null);
+        setCurrentTimeEntryTimer(null);
+      }
+    };
+  }, [currentTimeEntry]);
 
   const onTimeEntryStartClick = async () => {
     try {
@@ -318,8 +377,12 @@ const App = () => {
   return (
     <TabbedView>
       <TimeEntryTab>
-        <Inline alignBlock="center" space="space.200">
-          {currentTimeEntry?.id && <Text>{currentTimeEntry.description}</Text>}
+        <Inline alignBlock="center" space="space.200" spread="space-between">
+          {currentTimeEntry?.id && (
+            <Text>{`${currentTimeEntry.description} ${
+              currentTimeEntryTimer ?? "-"
+            }`}</Text>
+          )}
           {timerButton}
         </Inline>
       </TimeEntryTab>
