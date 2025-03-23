@@ -19,6 +19,9 @@ import ForgeReconciler, {
   Textfield,
   useForm,
   Spinner,
+  List,
+  ListItem,
+  Stack,
 } from "@forge/react";
 import React, { useEffect, useState, useReducer } from "react";
 
@@ -152,6 +155,21 @@ const timerStateReducer = (state, event) => {
   return state;
 };
 
+const timeEntriesStateReducer = (state, event) => {
+  switch (state) {
+    case LoadingState.Initial:
+    case LoadingState.Loaded:
+    case LoadingState.Faulted:
+      if (event === LoadingEvent.Load) return LoadingState.Loading;
+      break;
+    case LoadingState.Loading:
+      if (event === LoadingEvent.Success) return LoadingState.Loaded;
+      if (event === LoadingEvent.Fail) return LoadingState.Faulted;
+      break;
+  }
+  return state;
+};
+
 const timeSincePassed = (dateString) => {
   // Parse the input date string
   const pastDate = new Date(dateString);
@@ -236,28 +254,35 @@ const startTimeEntry = async (apiKey, workspaceId) => {
 };
 
 const stopTimeEntry = async (apiKey, workspaceId, timeEntryId) => {
-  await invoke("stopTogglTimeEntry", {
-    apiKey,
-    timeEntryId,
-    workspaceId,
-  });
+  try {
+    await invoke("stopTogglTimeEntry", {
+      apiKey,
+      timeEntryId,
+      workspaceId,
+    });
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+const getIssueTimeEntries = async (apiKey) => {
+  try {
+    return await invoke("getIssueTimeEntries", {
+      apiKey,
+    });
+  } catch (e) {
+    console.error(e);
+  }
 };
 
 const App = () => {
-  const [apiKey, setApiKey] = useState(null);
-  const [user, setUser] = useState(null);
-  const [currentTimeEntry, setCurrentTimeEntry] = useState(null);
-  const [currentTimeEntryTimer, setCurrentTimeEntryTimer] = useState(null);
-  const [currentTimeEntryInterval, setCurrentTimeEntryInterval] =
-    useState(null);
+  // Handle app setup: user and toggl api key
   const [appState, appStateDispatch] = useReducer(
     appStateReducer,
     LoadingState.Initial
   );
-  const [timerState, timerStateDispatch] = useReducer(
-    timerStateReducer,
-    LoadingState.Initial
-  );
+  const [apiKey, setApiKey] = useState(null);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     appStateDispatch(LoadingEvent.Load);
@@ -276,6 +301,21 @@ const App = () => {
       });
   }, []);
 
+  const onSubmitApiKey = async (formData) => {
+    try {
+      await postApiKey(formData.apiKey);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Handle timer interactions (start/stop)
+  const [currentTimeEntry, setCurrentTimeEntry] = useState(null);
+  const [timerState, timerStateDispatch] = useReducer(
+    timerStateReducer,
+    LoadingState.Initial
+  );
+
   useEffect(() => {
     if (apiKey) {
       timerStateDispatch(LoadingEvent.Load);
@@ -288,24 +328,6 @@ const App = () => {
         });
     }
   }, [apiKey]);
-
-  useEffect(() => {
-    if (currentTimeEntry?.start) {
-      const interval = setInterval(() => {
-        const timeSince = timeSincePassed(currentTimeEntry.start);
-        setCurrentTimeEntryTimer(timeSince);
-      }, 1000);
-      setCurrentTimeEntryInterval(interval);
-    }
-
-    return () => {
-      if (!currentTimeEntry) {
-        clearInterval(currentTimeEntryInterval);
-        setCurrentTimeEntryInterval(null);
-        setCurrentTimeEntryTimer(null);
-      }
-    };
-  }, [currentTimeEntry]);
 
   const onTimeEntryStartClick = async () => {
     try {
@@ -336,18 +358,6 @@ const App = () => {
     }
   };
 
-  const onSubmitApiKey = async (formData) => {
-    try {
-      await postApiKey(formData.apiKey);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  if ([LoadingState.Initial, LoadingState.Loading].includes(appState)) {
-    return <Spinner />;
-  }
-
   let timerButton = null;
 
   if (currentTimeEntry?.id) {
@@ -374,17 +384,84 @@ const App = () => {
     );
   }
 
+  // Handle timer counter
+  const [currentTimeEntryTimer, setCurrentTimeEntryTimer] = useState(null);
+  const [currentTimeEntryInterval, setCurrentTimeEntryInterval] =
+    useState(null);
+
+  useEffect(() => {
+    if (currentTimeEntry?.start) {
+      const interval = setInterval(() => {
+        const timeSince = timeSincePassed(currentTimeEntry.start);
+        setCurrentTimeEntryTimer(timeSince);
+      }, 1000);
+      setCurrentTimeEntryInterval(interval);
+    }
+
+    return () => {
+      if (!currentTimeEntry) {
+        clearInterval(currentTimeEntryInterval);
+        setCurrentTimeEntryInterval(null);
+        setCurrentTimeEntryTimer(null);
+      }
+    };
+  }, [currentTimeEntry]);
+
+  // Handle time entries list
+  const [timeEntries, setTimeEntries] = useState([]);
+  const [timeEntriesState, timeEntriesStateDispatch] = useReducer(
+    timeEntriesStateReducer,
+    LoadingState.Initial
+  );
+  useEffect(() => {
+    if (apiKey && !currentTimeEntry) {
+      timeEntriesStateDispatch(LoadingEvent.Load);
+      getIssueTimeEntries(apiKey)
+        .then((timeEntries) => {
+          setTimeEntries(timeEntries.filter(entry => entry.duration > 0))
+        })
+        .then(() => timeEntriesStateDispatch(LoadingEvent.Success))
+        .catch((e) => {
+          timeEntriesStateDispatch(LoadingEvent.Fail);
+          console.error(e);
+        });
+    }
+  }, [apiKey, currentTimeEntry]);
+
+  let timeEntriesComponent = null;
+  if ([LoadingState.Initial, LoadingState.Loading].includes(timeEntriesState)) {
+    timeEntriesComponent = <Spinner />;
+  } else {
+    timeEntriesComponent = (
+      <List type="unordered">
+        {timeEntries.map((timeEntry) => (
+          <ListItem key={timeEntry.key}>
+            {timeEntry.description} - {timeEntry.duration}s @{" "}
+            {new Date(timeEntry.start).toDateString()}
+          </ListItem>
+        ))}
+      </List>
+    );
+  }
+
+  if ([LoadingState.Initial, LoadingState.Loading].includes(appState)) {
+    return <Spinner />;
+  }
+
   return (
     <TabbedView>
       <TimeEntryTab>
-        <Inline alignBlock="center" space="space.200" spread="space-between">
-          {currentTimeEntry?.id && (
-            <Text>{`${currentTimeEntry.description} ${
-              currentTimeEntryTimer ?? "-"
-            }`}</Text>
-          )}
-          {timerButton}
-        </Inline>
+        <Stack>
+          <Inline alignBlock="center" space="space.200" spread="space-between">
+            {currentTimeEntry?.id && (
+              <Text>{`${currentTimeEntry.description} ${
+                currentTimeEntryTimer ?? "..."
+              }`}</Text>
+            )}
+            {timerButton}
+          </Inline>
+          {timeEntriesComponent}
+        </Stack>
       </TimeEntryTab>
       <SettingsTab>
         <TokenForm onSubmit={onSubmitApiKey} apiKey={apiKey} />

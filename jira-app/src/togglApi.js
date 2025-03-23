@@ -32,7 +32,7 @@ export const createClient = (apiToken) => {
       return jsonResponse ?? {};
     } catch (e) {
       console.error(e);
-      return {}
+      return {};
     }
   };
 
@@ -60,8 +60,16 @@ export const createClient = (apiToken) => {
     return await callApi("me/time_entries/current", "GET");
   };
 
+  const getTimeEntries = async (startDate, endDate) => {
+    const params = new URLSearchParams();
+    // params.append("start_date", startDate);
+
+    return await callApi(`me/time_entries?${params}`, "GET");
+  };
+
   return {
     getCurrentTimeEntry,
+    getTimeEntries,
     getUser,
     startTimeEntry,
     stopTimeEntry,
