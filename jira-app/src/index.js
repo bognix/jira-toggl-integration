@@ -11,6 +11,13 @@ const formatDate = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+const fourteenDaysAgo = () => {
+  const today = new Date();
+  const fourteenDaysAgo = new Date(today);
+  fourteenDaysAgo.setDate(today.getDate() - 14);
+  return fourteenDaysAgo;
+};
+
 resolver.define("setTogglApiKey", async ({ payload, context }) => {
   await storage.setSecret(`${context.accountId}:togglApiKey`, payload);
 });
@@ -63,10 +70,22 @@ resolver.define("getCurrentTogglTimeEntry", async ({ payload }) => {
 
 resolver.define("getIssueTimeEntries", async ({ payload, context }) => {
   const apiClient = createClient(payload.apiKey);
-  const issueDetails = await fetchIssueDetails(context?.extension?.issue.key);
-  const timeEntryIdentifier = `${issueDetails.key} - ${issueDetails.fields.summary}`
-  const timeEntriesForPeriod = await apiClient.getTimeEntries(payload.startDate, null);
-  return timeEntriesForPeriod.filter(timeEntry => timeEntry.description === timeEntryIdentifier);
+  const issueAgileDetails = await fetchIssueScrumDetails(
+    context?.extension.issue.key
+  );
+  const firstActiveSprint =
+    issueAgileDetails.fields?.sprint?.state === "active"
+      ? issueAgileDetails.fields.sprint
+      : null;
+  let startDate = fourteenDaysAgo().toISOString();
+  if (firstActiveSprint) {
+    startDate = firstActiveSprint;
+  }
+  const timeEntryIdentifier = `${issueAgileDetails.key} - ${issueAgileDetails.fields.summary}`;
+  const timeEntriesForPeriod = await apiClient.getTimeEntries(startDate, null);
+  return timeEntriesForPeriod.filter(
+    (timeEntry) => timeEntry.description === timeEntryIdentifier
+  );
 });
 
 export const handler = resolver.getDefinitions();
