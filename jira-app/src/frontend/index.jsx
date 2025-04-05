@@ -183,20 +183,6 @@ const TimeEntryEvent = {
   FAILED: "FAILED",
 };
 
-const timeEntriesReducer = (state, event) => {
-  switch (state) {
-    case TimeEntryState.NOT_LOGGED:
-    case TimeEntryState.LOGGED:
-    case TimeEntryState.FAILED:
-      if (event === TimeEntryEvent.LOGGING) return TimeEntryState.LOGGING;
-      break;
-    case TimeEntryState.LOGGING:
-      if (event === TimeEntryEvent.LOGGED) return TimeEntryState.LOGGED;
-      if (event === TimeEntryEvent.FAILED) return TimeEntryState.FAILED;
-      break;
-  }
-};
-
 const secondsToTime = (seconds) => {
   let remainingSeconds = seconds;
   const days = Math.floor(remainingSeconds / (24 * 60 * 60));
@@ -218,7 +204,7 @@ const secondsToTime = (seconds) => {
 
 const formatTime = ({ days, hours, minutes, seconds }) => {
   if (days > 0) {
-    return `${days} ${hours}:${minutes}:${seconds}`;
+    return `${days}d ${hours}:${minutes}:${seconds}`;
   } else if (hours > 0) {
     return `${hours}:${minutes}:${seconds}`;
   } else if (minutes > 0) {
