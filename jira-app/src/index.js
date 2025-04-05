@@ -11,6 +11,10 @@ const formatDate = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+const formatStartDate = (date) => {
+  return new Date(date).toISOString().replace("Z", "+00:00");
+};
+
 const fourteenDaysAgo = () => {
   const today = new Date();
   const fourteenDaysAgo = new Date(today);
@@ -86,6 +90,30 @@ resolver.define("getIssueTimeEntries", async ({ payload, context }) => {
   return timeEntriesForPeriod.filter(
     (timeEntry) => timeEntry.description === timeEntryIdentifier
   );
+});
+
+resolver.define("logTimeToJira", async ({ payload, context }) => {
+  if (payload.duration < 60) {
+    throw new Error("Duration must be greater than 60 seconds");
+  }
+  const startFormatted = formatStartDate(payload.start);
+  const response = await api
+    .asApp()
+    .requestJira(
+      route`/rest/api/3/issue/${context?.extension?.issue.key}/worklog`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          timeSpentSeconds: payload.duration,
+          started: startFormatted,
+        }),
+      }
+    );
+
+  return response.json();
 });
 
 export const handler = resolver.getDefinitions();

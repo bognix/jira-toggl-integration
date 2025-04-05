@@ -19,6 +19,7 @@ app:
 permissions:
   scopes:
     - read:jira-work
+    - write:jira-work
     - read:issue:jira-software
     - storage:app
   external:

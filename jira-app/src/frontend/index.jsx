@@ -1,4 +1,4 @@
-import { invoke } from "@forge/bridge";
+import { invoke, showFlag } from "@forge/bridge";
 import ForgeReconciler, {
   Box,
   Button,
@@ -418,7 +418,7 @@ const App = () => {
       timeEntriesStateDispatch(LoadingEvent.Load);
       getIssueTimeEntries(apiKey)
         .then((timeEntries) => {
-          setTimeEntries(timeEntries.filter(entry => entry.duration > 0))
+          setTimeEntries(timeEntries.filter((entry) => entry.duration > 0));
         })
         .then(() => timeEntriesStateDispatch(LoadingEvent.Success))
         .catch((e) => {
@@ -428,7 +428,65 @@ const App = () => {
     }
   }, [apiKey, currentTimeEntry]);
 
+  const logTimeToJira = async (timeEntry) => {
+    try {
+      const markAsLoading = timeEntries.map((entry) =>
+        entry.start === timeEntry.start
+          ? { ...entry, loggingToJira: true }
+          : entry
+      );
+      setTimeEntries(markAsLoading);
+
+      await invoke("logTimeToJira", {
+        duration: timeEntry.duration,
+        start: timeEntry.start,
+      });
+
+      const markAsLogged = timeEntries.map((entry) =>
+        entry.start === timeEntry.start
+          ? { ...entry, loggedToJira: true, loggingToJira: false }
+          : entry
+      );
+      setTimeEntries(markAsLogged);
+    } catch (e) {
+      showFlag({
+        id: "error-flag",
+        title: "Failed logging time",
+        type: "error",
+        description: e.message,
+        isAutoDismiss: true,
+      });
+
+      const markAsLoaded = timeEntries.map((entry) =>
+        entry.start === timeEntry.start
+          ? { ...entry, loggingToJira: false }
+          : entry
+      );
+      setTimeEntries(markAsLoaded);
+      console.error(e);
+    }
+  };
+
   let timeEntriesComponent = null;
+  const getTimeEntryActionComponent = (timeEntry) => {
+    if (timeEntry.loggingToJira) {
+      return <Spinner />;
+    } else if (timeEntry.loggedToJira) {
+      return (
+        <Icon
+          glyph="editor-success"
+          label="logged to jira"
+          primaryColor="color.icon.success"
+        />
+      );
+    } else {
+      return (
+        <Button appearance="subtle" onClick={() => logTimeToJira(timeEntry)}>
+          Log to Jira
+        </Button>
+      );
+    }
+  };
   if ([LoadingState.Initial, LoadingState.Loading].includes(timeEntriesState)) {
     timeEntriesComponent = <Spinner />;
   } else {
@@ -436,8 +494,13 @@ const App = () => {
       <List type="unordered">
         {timeEntries.map((timeEntry) => (
           <ListItem key={timeEntry.key}>
-            {timeEntry.description} - {timeEntry.duration}s @{" "}
-            {new Date(timeEntry.start).toDateString()}
+            <Inline spread="space-between">
+              <Text>
+                {timeEntry.description} - {timeEntry.duration}s @{" "}
+                {new Date(timeEntry.start).toDateString()}
+              </Text>
+              {getTimeEntryActionComponent(timeEntry)}
+            </Inline>
           </ListItem>
         ))}
       </List>
