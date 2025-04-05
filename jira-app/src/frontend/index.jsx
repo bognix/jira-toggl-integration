@@ -155,7 +155,7 @@ const timerStateReducer = (state, event) => {
   return state;
 };
 
-const timeEntriesStateReducer = (state, event) => {
+const timeEntriesListStateReducer = (state, event) => {
   switch (state) {
     case LoadingState.Initial:
     case LoadingState.Loaded:
@@ -170,6 +170,64 @@ const timeEntriesStateReducer = (state, event) => {
   return state;
 };
 
+const TimeEntryState = {
+  NOT_LOGGED: "NOT_LOGGED",
+  LOGGING: "LOGGING",
+  LOGGED: "LOGGED",
+  FAILED: "FAILED",
+};
+
+const TimeEntryEvent = {
+  LOGGING: "LOGGING",
+  LOGGED: "LOGGED",
+  FAILED: "FAILED",
+};
+
+const timeEntriesReducer = (state, event) => {
+  switch (state) {
+    case TimeEntryState.NOT_LOGGED:
+    case TimeEntryState.LOGGED:
+    case TimeEntryState.FAILED:
+      if (event === TimeEntryEvent.LOGGING) return TimeEntryState.LOGGING;
+      break;
+    case TimeEntryState.LOGGING:
+      if (event === TimeEntryEvent.LOGGED) return TimeEntryState.LOGGED;
+      if (event === TimeEntryEvent.FAILED) return TimeEntryState.FAILED;
+      break;
+  }
+};
+
+const secondsToTime = (seconds) => {
+  let remainingSeconds = seconds;
+  const days = Math.floor(remainingSeconds / (24 * 60 * 60));
+  remainingSeconds %= 24 * 60 * 60;
+
+  const hours = Math.floor(remainingSeconds / (60 * 60));
+  remainingSeconds %= 60 * 60;
+
+  const minutes = Math.floor(remainingSeconds / 60);
+  remainingSeconds %= 60;
+
+  return {
+    days,
+    hours,
+    minutes,
+    seconds: remainingSeconds,
+  };
+};
+
+const formatTime = ({ days, hours, minutes, seconds }) => {
+  if (days > 0) {
+    return `${days} ${hours}:${minutes}:${seconds}`;
+  } else if (hours > 0) {
+    return `${hours}:${minutes}:${seconds}`;
+  } else if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  } else {
+    return `${seconds}s`;
+  }
+};
+
 const timeSincePassed = (dateString) => {
   // Parse the input date string
   const pastDate = new Date(dateString);
@@ -180,34 +238,10 @@ const timeSincePassed = (dateString) => {
   // Calculate the difference in milliseconds
   const differenceMs = currentDate - pastDate;
 
-  // Convert milliseconds to seconds (round down to nearest integer)
-  let totalSeconds = Math.floor(differenceMs / 1000);
-
-  // Calculate days, hours, minutes, and remaining seconds
-  const days = Math.floor(totalSeconds / (24 * 60 * 60));
-  totalSeconds %= 24 * 60 * 60;
-
-  const hours = Math.floor(totalSeconds / (60 * 60));
-  totalSeconds %= 60 * 60;
-
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  // Pad minutes and seconds with leading zeros if needed
-  const paddedMinutes = minutes < 10 ? `0${minutes}` : minutes;
-  const paddedSeconds = seconds < 10 ? `0${seconds}` : seconds;
-
-  // Format the output according to the rules
-  if (days > 0) {
-    return `${days} ${hours}:${paddedMinutes}:${paddedSeconds}`;
-  } else if (hours > 0) {
-    return `${hours}:${paddedMinutes}:${paddedSeconds}`;
-  } else if (minutes > 0) {
-    return `${paddedMinutes}m:${paddedSeconds}s`;
-  } else {
-    return `${paddedSeconds}s`;
-  }
+  const differenceSeconds = Math.floor(differenceMs / 1000);
+  return formatTime(secondsToTime(differenceSeconds));
 };
+
 const getTogglApiKey = async () => {
   try {
     return await invoke("getTogglApiKey");
@@ -273,6 +307,81 @@ const getIssueTimeEntries = async (apiKey) => {
   } catch (e) {
     console.error(e);
   }
+};
+
+const TimeEntry = ({ timeEntry }) => {
+  const [timeEntryState, setTimeEntryState] = useState({
+    loggingToJira: false,
+    loggedToJira: false,
+  });
+
+  const logTimeToJira = async () => {
+    try {
+      setTimeEntryState({
+        ...timeEntryState,
+        loggingToJira: true,
+      });
+
+      await invoke("logTimeToJira", {
+        duration: timeEntry.duration,
+        start: timeEntry.start,
+      });
+
+      setTimeEntryState({
+        ...timeEntryState,
+        loggedToJira: true,
+        loggingToJira: false,
+      });
+    } catch (e) {
+      showFlag({
+        id: "error-flag",
+        title: `Failed logging time for issue ${timeEntry.description}`,
+        type: "error",
+        description: e.message,
+        isAutoDismiss: true,
+      });
+
+      setTimeEntryState({
+        ...timeEntryState,
+        loggingToJira: false,
+      });
+      console.error(e);
+    }
+  };
+
+  const getTimeEntryActionComponent = () => {
+    if (timeEntryState.loggingToJira) {
+      return <Spinner />;
+    } else if (timeEntryState.loggedToJira) {
+      return (
+        <Icon
+          glyph="editor-success"
+          label="logged to jira"
+          primaryColor="color.icon.success"
+        />
+      );
+    } else {
+      return (
+        <Button appearance="subtle" onClick={logTimeToJira}>
+          Log to Jira
+        </Button>
+      );
+    }
+  };
+
+  const timeEntryDuration = formatTime(secondsToTime(timeEntry.duration));
+  const startedAt = new Date(timeEntry.start).toDateString();
+
+  return (
+    <ListItem>
+      <Inline spread="space-between" alignBlock="center">
+        <Text>
+          {timeEntry.description} ⏲️ {timeEntryDuration} 📅 {startedAt}
+        </Text>
+        <Box>{getTimeEntryActionComponent()}</Box>
+      </Inline>
+    </ListItem>
+  );
 };
 
 const App = () => {
@@ -409,101 +518,45 @@ const App = () => {
 
   // Handle time entries list
   const [timeEntries, setTimeEntries] = useState([]);
-  const [timeEntriesState, timeEntriesStateDispatch] = useReducer(
-    timeEntriesStateReducer,
+  const [timeEntriesListState, timeEntriesListStateDispatch] = useReducer(
+    timeEntriesListStateReducer,
     LoadingState.Initial
   );
   useEffect(() => {
     if (apiKey && !currentTimeEntry) {
-      timeEntriesStateDispatch(LoadingEvent.Load);
+      timeEntriesListStateDispatch(LoadingEvent.Load);
       getIssueTimeEntries(apiKey)
         .then((timeEntries) => {
           setTimeEntries(timeEntries.filter((entry) => entry.duration > 0));
         })
-        .then(() => timeEntriesStateDispatch(LoadingEvent.Success))
+        .then(() => timeEntriesListStateDispatch(LoadingEvent.Success))
         .catch((e) => {
-          timeEntriesStateDispatch(LoadingEvent.Fail);
+          timeEntriesListStateDispatch(LoadingEvent.Fail);
           console.error(e);
         });
     }
   }, [apiKey, currentTimeEntry]);
 
-  const logTimeToJira = async (timeEntry) => {
-    try {
-      const markAsLoading = timeEntries.map((entry) =>
-        entry.start === timeEntry.start
-          ? { ...entry, loggingToJira: true }
-          : entry
-      );
-      setTimeEntries(markAsLoading);
-
-      await invoke("logTimeToJira", {
-        duration: timeEntry.duration,
-        start: timeEntry.start,
-      });
-
-      const markAsLogged = timeEntries.map((entry) =>
-        entry.start === timeEntry.start
-          ? { ...entry, loggedToJira: true, loggingToJira: false }
-          : entry
-      );
-      setTimeEntries(markAsLogged);
-    } catch (e) {
-      showFlag({
-        id: "error-flag",
-        title: "Failed logging time",
-        type: "error",
-        description: e.message,
-        isAutoDismiss: true,
-      });
-
-      const markAsLoaded = timeEntries.map((entry) =>
-        entry.start === timeEntry.start
-          ? { ...entry, loggingToJira: false }
-          : entry
-      );
-      setTimeEntries(markAsLoaded);
-      console.error(e);
-    }
+  const logAllTimeEntries = async () => {
+    const timeEntriesToLog = timeEntries.filter((entry) => !entry.loggedToJira);
+    // TODO: log all time entries
   };
 
   let timeEntriesComponent = null;
-  const getTimeEntryActionComponent = (timeEntry) => {
-    if (timeEntry.loggingToJira) {
-      return <Spinner />;
-    } else if (timeEntry.loggedToJira) {
-      return (
-        <Icon
-          glyph="editor-success"
-          label="logged to jira"
-          primaryColor="color.icon.success"
-        />
-      );
-    } else {
-      return (
-        <Button appearance="subtle" onClick={() => logTimeToJira(timeEntry)}>
-          Log to Jira
-        </Button>
-      );
-    }
-  };
-  if ([LoadingState.Initial, LoadingState.Loading].includes(timeEntriesState)) {
+  if (
+    [LoadingState.Initial, LoadingState.Loading].includes(timeEntriesListState)
+  ) {
     timeEntriesComponent = <Spinner />;
   } else {
     timeEntriesComponent = (
-      <List type="unordered">
-        {timeEntries.map((timeEntry) => (
-          <ListItem key={timeEntry.key}>
-            <Inline spread="space-between">
-              <Text>
-                {timeEntry.description} - {timeEntry.duration}s @{" "}
-                {new Date(timeEntry.start).toDateString()}
-              </Text>
-              {getTimeEntryActionComponent(timeEntry)}
-            </Inline>
-          </ListItem>
-        ))}
-      </List>
+      <Stack space="space.200">
+        <Button onClick={logAllTimeEntries}>Log all</Button>
+        <List type="unordered">
+          {timeEntries.map((timeEntry) => {
+            return <TimeEntry key={timeEntry.start} timeEntry={timeEntry} />;
+          })}
+        </List>
+      </Stack>
     );
   }
 
@@ -514,8 +567,8 @@ const App = () => {
   return (
     <TabbedView>
       <TimeEntryTab>
-        <Stack>
-          <Inline alignBlock="center" space="space.200" spread="space-between">
+        <Stack space="space.200">
+          <Inline alignBlock="center" space="space.50" spread="space-between">
             {currentTimeEntry?.id && (
               <Text>{`${currentTimeEntry.description} ${
                 currentTimeEntryTimer ?? "..."
