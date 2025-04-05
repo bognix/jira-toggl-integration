@@ -62,8 +62,8 @@ export const createClient = (apiToken) => {
 
   const getTimeEntries = async (startDate, endDate) => {
     const params = new URLSearchParams();
-    // params.append("start_date", startDate);
-
+    params.append("start_date", startDate);
+    params.append("end_date", endDate ?? new Date().toISOString());
     return await callApi(`me/time_entries?${params}`, "GET");
   };
 
