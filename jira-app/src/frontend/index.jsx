@@ -172,12 +172,7 @@ const timeEntriesListStateReducer = (state, event) => {
 
 const TimeEntryState = {
   NOT_LOGGED: "NOT_LOGGED",
-  LOGGING: "LOGGING",
-  LOGGED: "LOGGED",
-  FAILED: "FAILED",
-};
-
-const TimeEntryEvent = {
+  TOO_SHORT: "TOO_SHORT",
   LOGGING: "LOGGING",
   LOGGED: "LOGGED",
   FAILED: "FAILED",
@@ -295,64 +290,22 @@ const getIssueTimeEntries = async (apiKey) => {
   }
 };
 
-const TimeEntry = ({ timeEntry }) => {
-  const [timeEntryState, setTimeEntryState] = useState({
-    loggingToJira: false,
-    loggedToJira: false,
-  });
-
-  const logTimeToJira = async () => {
-    try {
-      setTimeEntryState({
-        ...timeEntryState,
-        loggingToJira: true,
-      });
-
-      await invoke("logTimeToJira", {
-        duration: timeEntry.duration,
-        start: timeEntry.start,
-      });
-
-      setTimeEntryState({
-        ...timeEntryState,
-        loggedToJira: true,
-        loggingToJira: false,
-      });
-    } catch (e) {
-      showFlag({
-        id: "error-flag",
-        title: `Failed logging time for issue ${timeEntry.description}`,
-        type: "error",
-        description: e.message,
-        isAutoDismiss: true,
-      });
-
-      setTimeEntryState({
-        ...timeEntryState,
-        loggingToJira: false,
-      });
-      console.error(e);
-    }
-  };
-
+const TimeEntry = ({ timeEntry, onLogTimeToJira }) => {
   const getTimeEntryActionComponent = () => {
-    if (timeEntryState.loggingToJira) {
-      return <Spinner />;
-    } else if (timeEntryState.loggedToJira) {
-      return (
-        <Icon
-          glyph="editor-success"
-          label="logged to jira"
-          primaryColor="color.icon.success"
-        />
-      );
-    } else {
-      return (
-        <Button appearance="subtle" onClick={logTimeToJira}>
-          Log to Jira
-        </Button>
-      );
-    }
+    return (
+      <LoadingButton
+        appearance="subtle"
+        onClick={onLogTimeToJira}
+        isDisabled={[TimeEntryState.TOO_SHORT, TimeEntryState.LOGGED].includes(
+          timeEntry.loggedToJiraState
+        )}
+        isLoading={timeEntry.loggedToJiraState === TimeEntryState.LOGGING}
+      >
+        {timeEntry.loggedToJiraState === TimeEntryState.LOGGED
+          ? "Logged ✅"
+          : "Log to Jira"}
+      </LoadingButton>
+    );
   };
 
   const timeEntryDuration = formatTime(secondsToTime(timeEntry.duration));
@@ -513,7 +466,20 @@ const App = () => {
       timeEntriesListStateDispatch(LoadingEvent.Load);
       getIssueTimeEntries(apiKey)
         .then((timeEntries) => {
-          setTimeEntries(timeEntries.filter((entry) => entry.duration > 0));
+          setTimeEntries(
+            timeEntries
+              .filter((entry) => entry.duration > 0)
+              .map((entry) => {
+                let loggedToJiraState = TimeEntryState.NOT_LOGGED;
+                if (entry.duration < 60) {
+                  loggedToJiraState = TimeEntryState.TOO_SHORT;
+                }
+                return {
+                  ...entry,
+                  loggedToJiraState,
+                };
+              })
+          );
         })
         .then(() => timeEntriesListStateDispatch(LoadingEvent.Success))
         .catch((e) => {
@@ -522,6 +488,51 @@ const App = () => {
         });
     }
   }, [apiKey, currentTimeEntry]);
+
+  const updateTimeEntry = (timeEntry, updates) => {
+    return timeEntries.map((entry) => {
+      if (entry.start === timeEntry.start) {
+        return { ...entry, ...updates };
+      }
+      return entry;
+    });
+  };
+
+  const logTimeToJira = async (timeEntry) => {
+    try {
+      setTimeEntries(
+        updateTimeEntry(timeEntry, {
+          loggedToJiraState: TimeEntryState.LOGGING,
+        })
+      );
+
+      await invoke("logTimeToJira", {
+        duration: timeEntry.duration,
+        start: timeEntry.start,
+      });
+
+      setTimeEntries(
+        updateTimeEntry(timeEntry, {
+          loggedToJiraState: TimeEntryState.LOGGED,
+        })
+      );
+    } catch (e) {
+      showFlag({
+        id: "error-flag",
+        title: `Failed logging time for issue ${timeEntry.description}`,
+        type: "error",
+        description: e.message,
+        isAutoDismiss: true,
+      });
+
+      setTimeEntries(
+        updateTimeEntry(timeEntry, {
+          loggedToJiraState: TimeEntryState.FAILED,
+        })
+      );
+      console.error(e);
+    }
+  };
 
   const logAllTimeEntries = async () => {
     const timeEntriesToLog = timeEntries.filter((entry) => !entry.loggedToJira);
@@ -538,9 +549,13 @@ const App = () => {
       <Stack space="space.200">
         <Button onClick={logAllTimeEntries}>Log all</Button>
         <List type="unordered">
-          {timeEntries.map((timeEntry) => {
-            return <TimeEntry key={timeEntry.start} timeEntry={timeEntry} />;
-          })}
+          {timeEntries.map((timeEntry) => (
+            <TimeEntry
+              key={timeEntry.start}
+              timeEntry={timeEntry}
+              onLogTimeToJira={() => logTimeToJira(timeEntry)}
+            />
+          ))}
         </List>
       </Stack>
     );
