@@ -292,6 +292,19 @@ const getIssueTimeEntries = async (apiKey) => {
 
 const TimeEntry = ({ timeEntry, onLogTimeToJira }) => {
   const getTimeEntryActionComponent = () => {
+    let message = "Log to Jira";
+    switch (timeEntry.loggedToJiraState) {
+      case TimeEntryState.TOO_SHORT:
+        message = "Too short";
+        break;
+      case TimeEntryState.LOGGED:
+        message = "Logged ✅";
+        break;
+      case TimeEntryState.FAILED:
+        message = "Failed ❌";
+        break;
+    }
+
     return (
       <LoadingButton
         appearance="subtle"
@@ -301,9 +314,7 @@ const TimeEntry = ({ timeEntry, onLogTimeToJira }) => {
         )}
         isLoading={timeEntry.loggedToJiraState === TimeEntryState.LOGGING}
       >
-        {timeEntry.loggedToJiraState === TimeEntryState.LOGGED
-          ? "Logged ✅"
-          : "Log to Jira"}
+        {message}
       </LoadingButton>
     );
   };
@@ -456,7 +467,7 @@ const App = () => {
   }, [currentTimeEntry]);
 
   // Handle time entries list
-  const [timeEntries, setTimeEntries] = useState([]);
+  const [timeEntriesState, setTimeEntriesState] = useState([]);
   const [timeEntriesListState, timeEntriesListStateDispatch] = useReducer(
     timeEntriesListStateReducer,
     LoadingState.Initial
@@ -466,7 +477,7 @@ const App = () => {
       timeEntriesListStateDispatch(LoadingEvent.Load);
       getIssueTimeEntries(apiKey)
         .then((timeEntries) => {
-          setTimeEntries(
+          setTimeEntriesState(
             timeEntries
               .filter((entry) => entry.duration > 0)
               .map((entry) => {
@@ -489,7 +500,7 @@ const App = () => {
     }
   }, [apiKey, currentTimeEntry]);
 
-  const updateTimeEntry = (timeEntry, updates) => {
+  const updateTimeEntry = (timeEntries, timeEntry, updates) => {
     return timeEntries.map((entry) => {
       if (entry.start === timeEntry.start) {
         return { ...entry, ...updates };
@@ -500,8 +511,8 @@ const App = () => {
 
   const logTimeToJira = async (timeEntry) => {
     try {
-      setTimeEntries(
-        updateTimeEntry(timeEntry, {
+      setTimeEntriesState((previousState) =>
+        updateTimeEntry(previousState, timeEntry, {
           loggedToJiraState: TimeEntryState.LOGGING,
         })
       );
@@ -511,8 +522,8 @@ const App = () => {
         start: timeEntry.start,
       });
 
-      setTimeEntries(
-        updateTimeEntry(timeEntry, {
+      setTimeEntriesState((previousState) =>
+        updateTimeEntry(previousState, timeEntry, {
           loggedToJiraState: TimeEntryState.LOGGED,
         })
       );
@@ -525,8 +536,8 @@ const App = () => {
         isAutoDismiss: true,
       });
 
-      setTimeEntries(
-        updateTimeEntry(timeEntry, {
+      setTimeEntriesState((previousState) =>
+        updateTimeEntry(previousState, timeEntry, {
           loggedToJiraState: TimeEntryState.FAILED,
         })
       );
@@ -535,8 +546,12 @@ const App = () => {
   };
 
   const logAllTimeEntries = async () => {
-    const timeEntriesToLog = timeEntries.filter((entry) => !entry.loggedToJira);
-    // TODO: log all time entries
+    const timeEntriesToLog = timeEntriesState.filter(
+      (entry) => TimeEntryState.NOT_LOGGED === entry.loggedToJiraState
+    );
+    for await (const timeEntry of timeEntriesToLog) {
+      await logTimeToJira(timeEntry);
+    }
   };
 
   let timeEntriesComponent = null;
@@ -549,7 +564,7 @@ const App = () => {
       <Stack space="space.200">
         <Button onClick={logAllTimeEntries}>Log all</Button>
         <List type="unordered">
-          {timeEntries.map((timeEntry) => (
+          {timeEntriesState.map((timeEntry) => (
             <TimeEntry
               key={timeEntry.start}
               timeEntry={timeEntry}
