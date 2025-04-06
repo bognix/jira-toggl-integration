@@ -5,6 +5,7 @@ import {
   fetchIssueDetails,
   fetchIssueScrumDetails,
   logTimeToJira,
+  getLoggedTimeEntries,
 } from "./jiraApi";
 
 const resolver = new Resolver();
@@ -73,6 +74,10 @@ resolver.define("getIssueTimeEntries", async ({ payload, context }) => {
   return timeEntriesForPeriod.filter(
     (timeEntry) => timeEntry.description === timeEntryIdentifier
   );
+});
+
+resolver.define("getLoggedTimeEntries", async ({ _, context }) => {
+  return await getLoggedTimeEntries(context?.extension?.issue.key);
 });
 
 resolver.define("logTimeToJira", async ({ payload, context }) => {

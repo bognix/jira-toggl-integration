@@ -32,3 +32,10 @@ export const logTimeToJira = async (issueKey, timeSpentSeconds, started) => {
     }
   );
 };
+
+export const getLoggedTimeEntries = async (issueKey) => {
+  const response = await api
+    .asApp()
+    .requestJira(route`/rest/api/3/issue/${issueKey}/worklog`);
+  return await response.json();
+};

@@ -290,6 +290,14 @@ const getIssueTimeEntries = async (apiKey) => {
   }
 };
 
+const getLoggedTimeEntries = async () => {
+  try {
+    return await invoke("getLoggedTimeEntries");
+  } catch (e) {
+    console.error(e);
+  }
+};
+
 const TimeEntry = ({ timeEntry, onLogTimeToJira }) => {
   const getTimeEntryActionComponent = () => {
     let message = "Log to Jira";
@@ -472,9 +480,43 @@ const App = () => {
     timeEntriesListStateReducer,
     LoadingState.Initial
   );
+  const startToKey = (start) => {
+    return new Date(start).toISOString();
+  };
+
   useEffect(() => {
     if (apiKey && !currentTimeEntry) {
       timeEntriesListStateDispatch(LoadingEvent.Load);
+      Promise.all([getIssueTimeEntries(apiKey), getLoggedTimeEntries()])
+        .then(([togglTimeEntries, jiraTimeEntries]) => {
+          const jiraTimeEntriesMap = new Map(
+            jiraTimeEntries.worklogs.map((entry) => [
+              startToKey(entry.started),
+              entry,
+            ])
+          );
+
+          const timeEntries = togglTimeEntries
+            .filter((entry) => entry.duration > 0)
+            .map((entry) => {
+              let loggedToJiraState = TimeEntryState.NOT_LOGGED;
+              if (entry.duration < 60) {
+                loggedToJiraState = TimeEntryState.TOO_SHORT;
+              } else if (jiraTimeEntriesMap.has(startToKey(entry.start))) {
+                loggedToJiraState = TimeEntryState.LOGGED;
+              }
+              return {
+                ...entry,
+                loggedToJiraState,
+              };
+            });
+          setTimeEntriesState(timeEntries);
+        })
+        .catch((e) => {
+          timeEntriesListStateDispatch(LoadingEvent.Fail);
+          console.error(e);
+        });
+
       getIssueTimeEntries(apiKey)
         .then((timeEntries) => {
           setTimeEntriesState(
@@ -555,6 +597,9 @@ const App = () => {
   };
 
   let timeEntriesComponent = null;
+  const hasEntriesToLog = timeEntriesState.some(
+    (entry) => TimeEntryState.NOT_LOGGED === entry.loggedToJiraState
+  );
   if (
     [LoadingState.Initial, LoadingState.Loading].includes(timeEntriesListState)
   ) {
@@ -562,7 +607,9 @@ const App = () => {
   } else {
     timeEntriesComponent = (
       <Stack space="space.200">
-        <Button onClick={logAllTimeEntries}>Log all</Button>
+        <Button isDisabled={!hasEntriesToLog} onClick={logAllTimeEntries}>
+          {hasEntriesToLog ? "Log all" : "No entries to log"}
+        </Button>
         <List type="unordered">
           {timeEntriesState.map((timeEntry) => (
             <TimeEntry
